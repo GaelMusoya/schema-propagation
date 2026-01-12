@@ -1,0 +1,35 @@
+services:
+  propagator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${APP_HOST_PORT}:${APP_PORT}"
+    env_file:
+      - .env
+    volumes:
+      - ./schema_propagation:/app/schema_propagation
+      - ./sql_versions:/app/sql_versions
+      - ./docker/entrypoint.sh:/entrypoint.sh
+    depends_on:
+      - pgbouncer
+    networks:
+      - propagation-net
+
+  pgbouncer:
+    image: edoburu/pgbouncer:1.21.0
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://${DB_USERNAME}:${DB_PASSWORD}@${DB_ENDPOINT}:${DB_PORT}/${DB_NAME}
+      - POOL_MODE=${PGBOUNCER_POOL_MODE}
+      - MAX_CLIENT_CONN=${PGBOUNCER_MAX_CLIENT_CONN}
+      - DEFAULT_POOL_SIZE=${PGBOUNCER_DEFAULT_POOL_SIZE}
+    ports:
+      - "${PGBOUNCER_PORT}:6432"
+    networks:
+      - propagation-net
+
+networks:
+  propagation-net:
+    driver: bridge
