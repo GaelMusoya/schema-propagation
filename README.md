@@ -79,6 +79,66 @@ curl -X POST http://localhost:8001/schema/propagate \
 curl http://localhost:8001/schema/propagate/{job_id}
 ```
 
+## Quick Test: Create 5 Tenant DBs and Propagate
+
+**Windows PowerShell** (uses `curl.exe` to avoid the built‑in alias):
+
+```powershell
+# 1) Create 5 databases: cmp_1..cmp_5
+curl.exe -X POST http://localhost:8001/schema/simulate/create `
+  -H "Content-Type: application/json" `
+  -d '{\"count\":5,\"prefix\":\"cmp_\",\"start_id\":1}'
+
+# 2) Verify they exist
+curl.exe http://localhost:8001/schema/databases?pattern=cmp_%
+
+# 3) Generate SQL from migrations (note the version_id)
+curl.exe -X POST http://localhost:8001/schema/generate `
+  -H "Content-Type: application/json" `
+  -d '{\"description\":\"test run\",\"target_revision\":\"head\"}'
+
+# 4) Propagate to the 5 DBs (replace VERSION_ID)
+curl.exe -X POST http://localhost:8001/schema/propagate `
+  -H "Content-Type: application/json" `
+  -d '{\"version_id\":\"VERSION_ID\",\"dry_run\":false,\"max_connections\":20}'
+
+# 5) Check status (replace JOB_ID)
+curl.exe http://localhost:8001/schema/propagate/JOB_ID
+```
+
+**Linux/macOS shells** (straight JSON, no escaping gymnastics):
+
+```bash
+curl -X POST http://localhost:8001/schema/simulate/create \
+  -H "Content-Type: application/json" \
+  -d '{"count":5,"prefix":"cmp_","start_id":1}'
+
+curl http://localhost:8001/schema/databases?pattern=cmp_%
+
+curl -X POST http://localhost:8001/schema/generate \
+  -H "Content-Type: application/json" \
+  -d '{"description":"test run","target_revision":"head"}'
+
+curl -X POST http://localhost:8001/schema/propagate \
+  -H "Content-Type: application/json" \
+  -d '{"version_id":"VERSION_ID","dry_run":false,"max_connections":20}'
+
+curl http://localhost:8001/schema/propagate/JOB_ID
+```
+
+Cleanup test databases:
+
+```powershell
+curl.exe -X DELETE http://localhost:8001/schema/simulate/cleanup?prefix=cmp_  # PowerShell
+```
+```bash
+curl -X DELETE http://localhost:8001/schema/simulate/cleanup?prefix=cmp_      # Linux/macOS
+```
+
+### Common 422 Causes
+- Wrong endpoint: `/schema/generate` requires `description`; `/schema/simulate/create` requires `count`. If the server complains about `description` but you sent `count`, the request likely hit `/schema/generate` or the JSON was malformed.
+- PowerShell JSON quoting: prefer the `curl.exe ... -d '{\"key\":\"value\"}'` style above, or use `Invoke-RestMethod -Body (@{count=5;prefix='cmp_';start_id=1} | ConvertTo-Json)`.
+
 ## Project Structure
 
 ```

@@ -20,6 +20,7 @@ def generate_sql(description: str, target_revision: str = "head") -> dict:
 
     config = Config(settings.alembic_config_path)
     script = ScriptDirectory.from_config(config)
+    head = script.get_current_head()
 
     # Capture SQL in offline mode
     upgrade_sql = StringIO()
@@ -29,7 +30,8 @@ def generate_sql(description: str, target_revision: str = "head") -> dict:
     command.upgrade(config, target_revision, sql=True)
 
     config.output_buffer = downgrade_sql
-    command.downgrade(config, "-1", sql=True)
+    from_rev = head or target_revision
+    command.downgrade(config, f"{from_rev}:base", sql=True)
 
     upgrade_content = upgrade_sql.getvalue()
     downgrade_content = downgrade_sql.getvalue()
@@ -38,7 +40,6 @@ def generate_sql(description: str, target_revision: str = "head") -> dict:
     version_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     checksum = hashlib.sha256(upgrade_content.encode()).hexdigest()[:16]
 
-    head = script.get_current_head()
     version_path = versions_dir / version_id
     version_path.mkdir(exist_ok=True)
 

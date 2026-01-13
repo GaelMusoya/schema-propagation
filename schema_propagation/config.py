@@ -1,7 +1,8 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     db_endpoint: str = "localhost"
     db_port: int = 5432
     db_username: str = "postgres"
@@ -27,9 +28,6 @@ class Settings(BaseSettings):
         host = self.pgbouncer_host if use_pgbouncer else self.db_endpoint
         port = self.pgbouncer_port if use_pgbouncer else self.db_port
         return f"postgresql://{self.db_username}:{self.db_password}@{host}:{port}/{database}"
-
-    class Config:
-        env_file = ".env"
 
 @lru_cache
 def get_settings() -> Settings:

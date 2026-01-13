@@ -17,7 +17,7 @@ services:
       - propagation-net
 
   pgbouncer:
-    image: edoburu/pgbouncer:1.21.0
+    image: edoburu/pgbouncer:latest
     env_file:
       - .env
     environment:
