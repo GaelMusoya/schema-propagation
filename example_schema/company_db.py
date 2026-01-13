@@ -168,6 +168,29 @@ class PurchaseOrder(Base):
             "updated_at": str(self.updated_at) if hasattr(self, 'updated_at') else None
         }
     
+class Tags(Base):
+    __tablename__ = 'tags'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(50), nullable=False)
+    company_id = Column(Integer, nullable=False)
+    type = Column(String(20), nullable=False)  # e.g., company_name, custom, etc.
+    reference_id = Column(Integer, nullable=True)  # Optional reference to another entity (e.g. relationship id)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    def to_dict(self):
+        """
+        Convert the model to a dictionary for API responses
+        """
+        return {
+            "id": self.id,
+            "name": self.name,
+            "company_id": self.company_id,
+            "type": self.type,
+            "reference_id": self.reference_id,
+            "created_at": str(self.created_at) if hasattr(self, 'created_at') else None,
+            "updated_at": str(self.updated_at) if hasattr(self, 'updated_at') else None
+        }
 
 class Category(Base):
     __tablename__ = 'categories'
@@ -209,7 +232,7 @@ class RequisitionType(Base):
     __tablename__ = 'requisition_types'
     id = Column(Integer, primary_key=True)
     name = Column(String(100), nullable=False)
-    bias = Column(String(255), nullable=True)
+    description = Column(String(255), nullable=True)
     
     # Hierarchical structure
     parent_id = Column(Integer, ForeignKey('requisition_types.id'), nullable=True)
