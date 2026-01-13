@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from .generator import generate_sql, get_version, list_versions
+from .generator import generate_sql, generate_sql_from_models, get_version, list_versions
 from .propagator import (
     get_job, list_tenant_databases, propagate, stream_job_progress, JobStatus
 )
@@ -22,6 +22,20 @@ class GenerateRequest(BaseModel):
 
 class PropagateRequest(BaseModel):
     version_id: str
+    dry_run: bool = False
+    max_connections: int = 100
+    database_pattern: str = "cmp_%"
+
+
+class GenerateFromModelsRequest(BaseModel):
+    path: str
+    base_symbol: str = "Base"
+    description: str = "models import"
+    prune_missing: bool = False
+    previous_version_id: str | None = None
+
+
+class PropagateFromModelsRequest(GenerateFromModelsRequest):
     dry_run: bool = False
     max_connections: int = 100
     database_pattern: str = "cmp_%"
@@ -63,6 +77,22 @@ async def run_propagation(job_id: str, sql: str, version_id: str, checksum: str,
 async def generate(request: GenerateRequest):
     try:
         return generate_sql(request.description, request.target_revision)
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.post("/generate/models")
+async def generate_from_models(request: GenerateFromModelsRequest):
+    try:
+        return generate_sql_from_models(
+            request.path,
+            request.base_symbol,
+            request.description,
+            request.prune_missing,
+            request.previous_version_id
+        )
+    except (FileNotFoundError, ValueError, ImportError) as e:
+        raise HTTPException(400, str(e))
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -112,13 +142,56 @@ async def start_propagation(request: PropagateRequest, background_tasks: Backgro
     return {"job_id": job.job_id, "status": "started", "total_databases": len(databases)}
 
 
+@router.post("/propagate/models")
+async def propagate_from_models(request: PropagateFromModelsRequest, background_tasks: BackgroundTasks):
+    try:
+        generation = generate_sql_from_models(
+            request.path,
+            request.base_symbol,
+            request.description,
+            request.prune_missing,
+            request.previous_version_id
+        )
+    except (FileNotFoundError, ValueError, ImportError) as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+    databases = await list_tenant_databases(request.database_pattern)
+    if not databases:
+        raise HTTPException(400, "No databases found matching pattern")
+
+    from .propagator import create_job
+    job = create_job(generation["version_id"], len(databases))
+
+    background_tasks.add_task(
+        run_propagation,
+        job.job_id,
+        generation["upgrade_sql"],
+        generation["version_id"],
+        generation["checksum"],
+        databases,
+        request.max_connections,
+        request.dry_run
+    )
+
+    return {
+        "job_id": job.job_id,
+        "version_id": generation["version_id"],
+        "checksum": generation["checksum"],
+        "status": "started",
+        "total_databases": len(databases)
+    }
+
+
 @router.get("/propagate/{job_id}")
 async def get_propagation_status(job_id: str):
     job = get_job(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
     
-    elapsed = time.time() - job.started_at if job.started_at else 0
+    reference_time = job.ended_at or time.time()
+    elapsed = reference_time - job.started_at if job.started_at else 0
     rate = job.completed / elapsed if elapsed > 0 else 0
     remaining = job.total - job.completed
     eta = remaining / rate if rate > 0 else 0
@@ -135,6 +208,10 @@ async def get_propagation_status(job_id: str):
         },
         "rate": f"{rate:.1f} db/s",
         "eta_seconds": int(eta),
+        "latency": {
+            "elapsed_ms": int(elapsed * 1000),
+            "per_db": job.db_timings[: job.total or 10]  # small safety slice
+        },
         "errors": job.errors[:10]  # Limit to 10
     }
 

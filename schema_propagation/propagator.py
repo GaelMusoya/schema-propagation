@@ -54,8 +54,10 @@ class PropagationJob:
     failed: int = 0
     skipped: int = 0
     started_at: float = 0
+    ended_at: float = 0
     errors: list[dict] = field(default_factory=list)
     stop_requested: bool = False
+    db_timings: list[dict] = field(default_factory=list)
 
 
 # In-memory job store (use Redis for production distributed workers)
@@ -163,6 +165,12 @@ async def propagate(
             job.failed += 1
             job.errors.append({"database": result.database, "error": result.error})
         
+        job.db_timings.append({
+            "database": result.database,
+            "status": result.status.value,
+            "duration_ms": round(result.duration_ms, 2)
+        })
+        
         # Error threshold circuit breaker
         if job.total > 0:
             error_pct = (job.failed / job.total) * 100
@@ -173,6 +181,8 @@ async def propagate(
     job.status = JobStatus.COMPLETED if not job.stop_requested else JobStatus.STOPPED
     if job.failed > 0 and job.successful == 0:
         job.status = JobStatus.FAILED
+    
+    job.ended_at = time.time()
     
     return job
 
@@ -185,7 +195,8 @@ async def stream_job_progress(job_id: str) -> AsyncIterator[dict]:
             yield {"error": "Job not found"}
             break
         
-        elapsed = time.time() - job.started_at if job.started_at else 0
+        reference_time = job.ended_at or time.time()
+        elapsed = reference_time - job.started_at if job.started_at else 0
         rate = job.completed / elapsed if elapsed > 0 else 0
         remaining = job.total - job.completed
         eta = remaining / rate if rate > 0 else 0
@@ -199,7 +210,8 @@ async def stream_job_progress(job_id: str) -> AsyncIterator[dict]:
             "failed": job.failed,
             "skipped": job.skipped,
             "rate": f"{rate:.1f} db/s",
-            "eta_seconds": int(eta)
+            "eta_seconds": int(eta),
+            "elapsed_ms": int(elapsed * 1000)
         }
         
         if job.status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.STOPPED):

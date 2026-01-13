@@ -45,8 +45,10 @@ docker-compose up -d
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/schema/generate` | Generate SQL from Alembic |
+| POST | `/schema/generate/models` | Generate SQL from a SQLAlchemy models file |
 | GET | `/schema/versions` | List all versions |
 | POST | `/schema/propagate` | Start propagation job |
+| POST | `/schema/propagate/models` | Generate SQL from models and propagate in one step |
 | GET | `/schema/propagate/{job_id}` | Get job status |
 | GET | `/schema/propagate/{job_id}/stream` | SSE real-time updates |
 | POST | `/schema/propagate/{job_id}/stop` | Stop propagation |
@@ -75,7 +77,7 @@ curl -X POST http://localhost:8001/schema/propagate \
   -H "Content-Type: application/json" \
   -d '{"version_id": "20260112_143000", "max_connections": 100}'
 
-# Monitor progress
+# Monitor progress (response includes per-db latency and total elapsed_ms)
 curl http://localhost:8001/schema/propagate/{job_id}
 ```
 
@@ -134,6 +136,9 @@ curl.exe -X DELETE http://localhost:8001/schema/simulate/cleanup?prefix=cmp_  # 
 ```bash
 curl -X DELETE http://localhost:8001/schema/simulate/cleanup?prefix=cmp_      # Linux/macOS
 ```
+
+### Model-driven propagation (optional pruning)
+- `POST /schema/propagate/models` body supports: `path` (container path to models file), `base_symbol` (default `Base`), `database_pattern`, `max_connections`, `dry_run`, and `prune_missing` (default `false`). When `prune_missing` is true, the generated SQL will also drop tables/columns that were present in the previous models generation but are no longer defined.
 
 ### Common 422 Causes
 - Wrong endpoint: `/schema/generate` requires `description`; `/schema/simulate/create` requires `count`. If the server complains about `description` but you sent `count`, the request likely hit `/schema/generate` or the JSON was malformed.

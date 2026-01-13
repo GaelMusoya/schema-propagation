@@ -10,6 +10,7 @@ services:
     volumes:
       - ./schema_propagation:/app/schema_propagation
       - ./sql_versions:/app/sql_versions
+      - ./example_schema:/app/example_schema
       - ./docker/entrypoint.sh:/entrypoint.sh
     depends_on:
       - pgbouncer
