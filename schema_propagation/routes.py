@@ -56,7 +56,7 @@ SAMPLE_SQL = {
 async def run_propagation(job_id: str, sql: str, version_id: str, checksum: str, databases: list[str], max_connections: int, dry_run: bool):
     job = get_job(job_id)
     if job:
-        await propagate(sql, version_id, checksum, databases, max_connections, dry_run)
+        await propagate(sql, version_id, checksum, databases, max_connections, dry_run, job)
 
 
 @router.post("/generate")

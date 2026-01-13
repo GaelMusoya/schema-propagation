@@ -97,13 +97,15 @@ async def propagate(
     checksum: str,
     databases: list[str],
     max_connections: int | None = None,
-    dry_run: bool = False
+    dry_run: bool = False,
+    job: PropagationJob | None = None
 ) -> PropagationJob:
     """Propagate SQL to all databases concurrently."""
     settings = get_settings()
     max_conn = max_connections or settings.max_concurrent_connections
     semaphore = asyncio.Semaphore(max_conn)
-    job = create_job(version_id, len(databases))
+    job = job or create_job(version_id, len(databases))
+    job.total = len(databases)
     job.status = JobStatus.IN_PROGRESS
 
     async def process_db(db: str) -> DBResult:

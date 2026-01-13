@@ -21,10 +21,13 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgres://${DB_USERNAME}:${DB_PASSWORD}@${DB_ENDPOINT}:${DB_PORT}/${DB_NAME}
+      # Use wildcard database entry so PgBouncer accepts connections to any tenant DB
+      - DATABASE_URL=postgres://${DB_USERNAME}:${DB_PASSWORD}@${DB_ENDPOINT}:${DB_PORT}/
       - POOL_MODE=${PGBOUNCER_POOL_MODE}
       - MAX_CLIENT_CONN=${PGBOUNCER_MAX_CLIENT_CONN}
       - DEFAULT_POOL_SIZE=${PGBOUNCER_DEFAULT_POOL_SIZE}
+      - LISTEN_PORT=${PGBOUNCER_PORT}
+      - AUTH_TYPE=scram-sha-256
     ports:
       - "${PGBOUNCER_PORT}:6432"
     networks:
